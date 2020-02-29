@@ -5,7 +5,7 @@
 
 #define RB_HUE_STEPS 10
 #define GLOBAL_SAT 255
-#define GLOBAL_BRGHT 50
+#define GLOBAL_BRGHT 80
 #define frame_tick 20 //delays between frameupdates
 #define game_tick 400 //delays between game updates
 
@@ -46,10 +46,10 @@ typedef enum{
 
 typedef enum{
   BLANK = 0,
-  RB,
-  RED,
-  GREEN,
-  BLUE
+  RB = -1,
+  RED = -2,
+  GREEN = -3,
+  BLUE = -4
 } color;
 
 /*
@@ -58,6 +58,8 @@ typedef enum{
 WS2812 LED(LEDCount);
 cRGB pixel;
 cRGB blank;
+int snake_lenght = 15;
+
 uint8_t board[LEDHeight][LEDWidth];
 
 void setup() {
@@ -74,30 +76,6 @@ void setup() {
   blank.g=0;
   blank.b=0;
 
-
-  int heartcolor = RB;
-  board[3][1] = heartcolor;
-  board[4][1] = heartcolor;
-  board[2][2] = heartcolor;
-  board[5][2] = heartcolor;
-  board[1][3] = heartcolor;
-  board[6][3] = heartcolor;
-  board[0][4] = heartcolor;
-  board[7][4] = heartcolor;
-  board[0][5] = heartcolor;
-  board[7][5] = heartcolor;
-  board[0][6] = heartcolor;
-  board[7][6] = heartcolor;
-  board[3][6] = heartcolor;
-  board[4][6] = heartcolor;
-  board[1][7] = heartcolor;
-  board[2][7] = heartcolor;
-  board[5][7] = heartcolor;
-  board[6][7] = heartcolor;
-  while(millis()<3000){
-    renderBoard();
-    delay(frame_tick);
-  }
   memset(board, 0, sizeof(board));
 }
 
@@ -109,19 +87,24 @@ void renderBoard(){
 
   for(int i = 0; i < LEDCount; i++)
   {
-    if(board[x][LEDWidth-1-y] == RB){
+    uint8_t field_value = board[x][LEDWidth-1-y];
+    if(field_value > 0){
+      pixel.SetHSV(((snake_lenght-field_value+2)*360/64)%360, GLOBAL_SAT, GLOBAL_BRGHT);
+      LED.set_crgb_at(i, pixel);
+    }
+    else if(field_value == RB){
       pixel.SetHSV((hue+i*360/9)%360, GLOBAL_SAT, GLOBAL_BRGHT);
       LED.set_crgb_at(i, pixel);
     }
-    else if(board[x][LEDWidth-1-y] == RED){
+    else if(field_value == RED){
       pixel.SetHSV(0, GLOBAL_SAT, GLOBAL_BRGHT);
       LED.set_crgb_at(i, pixel);
     }
-    else if(board[x][LEDWidth-1-y] == GREEN){
+    else if(field_value == GREEN){
       pixel.SetHSV(120, GLOBAL_SAT, GLOBAL_BRGHT);
       LED.set_crgb_at(i, pixel);
     }
-    else if(board[x][LEDWidth-1-y] == BLUE){
+    else if(field_value == BLUE){
       pixel.SetHSV(240, GLOBAL_SAT, GLOBAL_BRGHT);
       LED.set_crgb_at(i, pixel);
     }
@@ -169,6 +152,16 @@ void snake(uint8_t in){
   int new_pos[2];
 
   //memset(board, 0, sizeof(board));
+  /*
+   * shorten the snake
+   */
+  uint8_t* linear_board = (uint8_t*)board;
+  for(int i=0; i<LEDCount; i++)
+  {
+    if(linear_board[i]>0){
+      linear_board[i]--;
+    }
+  }
 
   /*
    * inputs
@@ -215,7 +208,9 @@ void snake(uint8_t in){
 
   pos[X_] = new_pos[X_];
   pos[Y_] = new_pos[Y_];
-  board[new_pos[0]][new_pos[1]] = GREEN;
+  board[new_pos[X_]][new_pos[Y_]] = snake_lenght;
+  if(snake_lenght == LEDCount)
+    snake_lenght = LEDCount;
 }
 
 bool task(int period){
@@ -244,7 +239,7 @@ void loop() {
    * timing
    */
   uint64_t time_end = millis();
-  if((time_end-time_start)>frame_tick*7/10)
+  if(true)//(time_end-time_start)>frame_tick*7/10)
   {
     Serial.print(" flow: ");
     Serial.print((int)((time_end-time_start)*100)/frame_tick);
