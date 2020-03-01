@@ -7,7 +7,7 @@
 #define GLOBAL_SAT 255
 #define GLOBAL_BRGHT 70
 #define frame_tick 20 //delays between frameupdates
-#define game_tick 250 //delays between game updates
+#define game_tick 180 //delays between game updates
 
 /*
  * snake settings
@@ -114,8 +114,10 @@ void renderBoard(){
       int8_t field_value = board[x][LEDWidth-1-y];
       if(field_value == APPLE)
         field_value = BLUE;
+      //if(field_value > 0)
+      //  field_value = RB;
       if(field_value > 0){
-        pixel.SetHSV(((snake_lenght-field_value+2+masked)*360/64)%360, GLOBAL_SAT/2, current_brightness);
+        pixel.SetHSV(((snake_lenght-field_value+2)*360/64)%360, GLOBAL_SAT/2, current_brightness);
         LED.set_crgb_at(i, pixel);
       }
       else if(field_value == RB){
@@ -219,6 +221,7 @@ void snake(uint8_t in){
       memset(board, 0, sizeof(board));
       board[pos[X_]][pos[Y_]] = snake_lenght;
       newApple();
+      newApple();
       time_start = millis();
       current_brightness = GLOBAL_BRGHT;
       masked = false;
@@ -297,7 +300,7 @@ void snake(uint8_t in){
     if(game_state == GAME_OVER){
       uint64_t time_game_over = millis();
       masked = true;
-      current_brightness = GLOBAL_BRGHT*1/4;
+      current_brightness = GLOBAL_BRGHT*4/5;
       return;
     }
 
