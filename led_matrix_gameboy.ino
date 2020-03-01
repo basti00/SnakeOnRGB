@@ -59,7 +59,7 @@ typedef enum{
   BLUE = -4,
   WHITE = -5,
   APPLE = -20,
-  APPLE = -21
+  GOLDENAPPLE = -21
 } color;
 
 typedef enum{
