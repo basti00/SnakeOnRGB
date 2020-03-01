@@ -5,15 +5,15 @@
 
 #define RB_HUE_STEPS 10
 #define GLOBAL_SAT 255
-#define GLOBAL_BRGHT 70
+#define GLOBAL_BRGHT 60
 #define frame_tick 20 //delays between frameupdates
 #define game_tick 180 //delays between game updates
-
+#define cheating false
 /*
  * snake settings
  */
-#define X_start 1
-#define Y_start 1
+#define X_start 0
+#define Y_start 0
 #define SNAKE_LENGHT_START 2
 
 /*
@@ -57,7 +57,8 @@ typedef enum{
   RED = -2,
   GREEN = -3,
   BLUE = -4,
-  APPLE = -5
+  WHITE = -5,
+  APPLE = -20
 } color;
 
 typedef enum{
@@ -77,8 +78,10 @@ cRGB blank;
 
 int snake_lenght = SNAKE_LENGHT_START;
 int game_state = IDLE;
+uint64_t time_since_statechange = 0;
 int8_t board[LEDHeight][LEDWidth];
 bool masked = false;
+bool effekt1 = false;
 uint8_t current_brightness = GLOBAL_BRGHT;
 
 void setup() {
@@ -103,6 +106,8 @@ void renderBoard(){
   int static hue = 0;   //stores 0 to 614
   hue += RB_HUE_STEPS;
   hue %= 360;
+  uint8_t level = snake_lenght / 12;
+
 
   if(masked){
     for(int i=0; i<LEDCount; i++)
@@ -112,16 +117,64 @@ void renderBoard(){
     for(int i = 0; i < LEDCount; i++)
     {
       int8_t field_value = board[x][LEDWidth-1-y];
-      if(field_value == APPLE)
-        field_value = BLUE;
-      //if(field_value > 0)
-      //  field_value = RB;
-      if(field_value > 0){
-        pixel.SetHSV(((snake_lenght-field_value+2)*360/64)%360, GLOBAL_SAT/2, current_brightness);
+
+      if(field_value == APPLE){
+        /* blinking apples
+        int peri = 300 ;
+        int t = millis() % peri;
+        if(t<peri/2){
+          pixel.SetHSV(0, 0, (uint16_t) current_brightness * t / peri/2 +10);
+        }
+        else{
+          t -= peri/2;
+          pixel.SetHSV(0, 0, (uint16_t) current_brightness * ((peri/2)-t) / peri/2 +10);
+        }*/
+        pixel.SetHSV(0, 0, (uint16_t) current_brightness/2);
         LED.set_crgb_at(i, pixel);
+      }
+      else if(field_value > 0){
+        if(game_state == GAME_OVER) {
+          if (((millis()-time_since_statechange) % ((snake_lenght)*60)) / 60 == (snake_lenght-field_value)){
+            LED.set_crgb_at(i, blank);
+          }
+          else{
+            pixel.SetHSV((level*360/(64/10))%360, GLOBAL_SAT/2, current_brightness);
+            LED.set_crgb_at(i, pixel);
+          }
+        }
+        else if(game_state == WON){
+          // changing rainbow from head to tail
+          pixel.SetHSV((hue+field_value*360/32)%360, GLOBAL_SAT/2, current_brightness);
+          LED.set_crgb_at(i, pixel);
+        }
+        else{
+          //change satuation to half
+          //pixel.SetHSV(((snake_lenght)*360/64)%360, field_value * (GLOBAL_SAT/2) * 3/4 / snake_lenght + 64, current_brightness);
+
+          // change sat to 0
+          // pixel.SetHSV(((snake_lenght)*360/64)%360, field_value * (GLOBAL_SAT/2) / snake_lenght, current_brightness);
+
+          // continous long rainbow snake, fixed
+          //pixel.SetHSV(((snake_lenght-field_value+2)*360/64)%360, GLOBAL_SAT/2, current_brightness);
+
+          // changing rainbow from head to tail
+          //pixel.SetHSV((hue+field_value*360/32)%360, GLOBAL_SAT/2, current_brightness);
+
+          // changing rainbow from tail to head
+          //pixel.SetHSV((hue+(snake_lenght-field_value+2)*360/32)%360, GLOBAL_SAT/2, current_brightness);
+
+          // changing color every 12 steps
+          pixel.SetHSV((level*360/(64/10))%360, GLOBAL_SAT/2, current_brightness);
+
+          LED.set_crgb_at(i, pixel);
+        }
       }
       else if(field_value == RB){
         pixel.SetHSV((hue+i*360/9)%360, GLOBAL_SAT, current_brightness);
+        LED.set_crgb_at(i, pixel);
+      }
+      else if(field_value == WHITE){
+        pixel.SetHSV(0, 0, current_brightness);
         LED.set_crgb_at(i, pixel);
       }
       else if(field_value == RED){
@@ -204,14 +257,13 @@ void snake(uint8_t in){
   int static vel[2] = {1,0};
   int static pos[2] = {X_start,Y_start};
   int new_pos[2];
-  uint64_t time_start = 0;
 
   /*
    * inputs
    */
   if(input(in,A))// || input(in,B))
   {
-    if(game_state == GAME_OVER || game_state == IDLE){
+    if(game_state == GAME_OVER || game_state == IDLE || game_state == WON){
       game_state = RUNNING;
       pos[X_] = X_start;
       pos[Y_] = Y_start;
@@ -221,16 +273,17 @@ void snake(uint8_t in){
       memset(board, 0, sizeof(board));
       board[pos[X_]][pos[Y_]] = snake_lenght;
       newApple();
-      newApple();
-      time_start = millis();
+      //newApple();
+      //newApple();
+      //newApple();
+      time_since_statechange = millis();
       current_brightness = GLOBAL_BRGHT;
       masked = false;
+      effekt1 = false;
     }
   }
 
   if(game_state == GAME_OVER || game_state == WON){
-    uint64_t time_since_gameover = (millis()-time_start);
-    masked = !masked;
   }
   else if(game_state == IDLE)
   {
@@ -298,28 +351,33 @@ void snake(uint8_t in){
       game_state = GAME_OVER;
 
     if(game_state == GAME_OVER){
-      uint64_t time_game_over = millis();
-      masked = true;
-      current_brightness = GLOBAL_BRGHT*4/5;
-      return;
+      if(cheating){
+        game_state = RUNNING;
+        return;
+      }
+      else{
+        time_since_statechange = millis();
+        return;
+      }
     }
 
     /*
      * check for apple, if not shorten the snake
      */
-
     int8_t* linear_board = (int8_t*)board;
     if(board[new_pos[X_]][new_pos[Y_]] == APPLE){
       snake_lenght++;
       newApple();
     }
     else
-      for(int i=0; i<LEDCount; i++)
+      for(int i=0; i<LEDCount && !cheating; i++)
       {
         if(linear_board[i]>0){
           linear_board[i]--;
         }
       }
+    if(cheating)
+      snake_lenght++;
 
     pos[X_] = new_pos[X_];
     pos[Y_] = new_pos[Y_];
