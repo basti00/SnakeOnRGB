@@ -12,9 +12,9 @@
 /*
  * snake settings
  */
-#define X_start 0
-#define Y_start 0
-#define SNAKE_LENGHT_START 2
+#define X_start 1
+#define Y_start 1
+#define SNAKE_LENGHT_START 1
 
 /*
  * board definitions
@@ -58,7 +58,8 @@ typedef enum{
   GREEN = -3,
   BLUE = -4,
   WHITE = -5,
-  APPLE = -20
+  APPLE = -20,
+  APPLE = -21
 } color;
 
 typedef enum{
@@ -138,11 +139,13 @@ void renderBoard(){
             LED.set_crgb_at(i, blank);
           }
           else{
-            pixel.SetHSV((level*360/(64/10))%360, GLOBAL_SAT/2, current_brightness);
+            uint16_t hue = (level*360/(6) )%360;
+            uint16_t bri = current_brightness * (field_value / snake_lenght) + 1;
+            pixel.SetHSV(hue, GLOBAL_SAT/2, bri);
             LED.set_crgb_at(i, pixel);
           }
         }
-        else if(game_state == WON){
+        else if(game_state == WON || game_state == IDLE){
           // changing rainbow from head to tail
           pixel.SetHSV((hue+field_value*360/32)%360, GLOBAL_SAT/2, current_brightness);
           LED.set_crgb_at(i, pixel);
@@ -163,14 +166,18 @@ void renderBoard(){
           // changing rainbow from tail to head
           //pixel.SetHSV((hue+(snake_lenght-field_value+2)*360/32)%360, GLOBAL_SAT/2, current_brightness);
 
-          // changing color every 12 steps
-          pixel.SetHSV((level*360/(64/10))%360, GLOBAL_SAT/2, current_brightness);
+          // changing color every 12 steps   + ((snake_lenght - field_value)* (64 / snake_lenght))
+          //uint16_t hue = (level*360/(64/6) )%360;  //nice discrete colors
+
+          uint16_t hue = (level*360/(6) )%360;
+          uint16_t bri = current_brightness * (field_value / snake_lenght) + 1;
+          pixel.SetHSV(hue, GLOBAL_SAT/2, bri);
 
           LED.set_crgb_at(i, pixel);
         }
       }
       else if(field_value == RB){
-        pixel.SetHSV((hue+i*360/9)%360, GLOBAL_SAT, current_brightness);
+        pixel.SetHSV((hue+i*360/9)%360, GLOBAL_SAT, current_brightness/2);
         LED.set_crgb_at(i, pixel);
       }
       else if(field_value == WHITE){
@@ -212,6 +219,8 @@ uint8_t getInput(uint8_t in){
   inp |= !digitalRead(down_but)<<DOWN;
   inp |= !digitalRead(right_but)<<RIGHT;
   inp |= !digitalRead(left_but)<<LEFT;
+  if(inp)
+    rng();
   return inp | in;
 }
 
@@ -250,7 +259,10 @@ void newApple(){
   if(free_places_cnt == 0){
     game_state = WON;
   }
-  linear_board[free_places[rng()%free_places_cnt]] = APPLE;
+  uint8_t kind_of_apple = APPLE;
+  if(rng()%100 == 42)
+    kind_of_apple = APPLE;
+  linear_board[free_places[rng()%free_places_cnt]] = kind_of_apple;
 }
 
 void snake(uint8_t in){
