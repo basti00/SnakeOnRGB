@@ -119,6 +119,9 @@ void renderBoard(){
     {
       int8_t field_value = board[x][LEDWidth-1-y];
 
+      if(field_value == GOLDENAPPLE){
+        field_value = RB;
+      }
       if(field_value == APPLE){
         /* blinking apples
         int peri = 300 ;
@@ -135,7 +138,7 @@ void renderBoard(){
       }
       else if(field_value > 0){
         if(game_state == GAME_OVER) {
-          if (((millis()-time_since_statechange) % ((snake_lenght)*60)) / 60 == (snake_lenght-field_value)){
+          if (((millis()-time_since_statechange) % ((snake_lenght+1)*60)) / 60 == (snake_lenght-field_value)){
             LED.set_crgb_at(i, blank);
           }
           else{
@@ -260,8 +263,8 @@ void newApple(){
     game_state = WON;
   }
   uint8_t kind_of_apple = APPLE;
-  if(rng()%100 == 42)
-    kind_of_apple = APPLE;
+  if(rng()%100 == 1)
+    kind_of_apple = GOLDENAPPLE;
   linear_board[free_places[rng()%free_places_cnt]] = kind_of_apple;
 }
 
@@ -381,6 +384,11 @@ void snake(uint8_t in){
       snake_lenght++;
       newApple();
     }
+    else if(board[new_pos[X_]][new_pos[Y_]] == GOLDENAPPLE){
+        snake_lenght+=2;
+        newApple();
+        newApple();
+      }
     else
       for(int i=0; i<LEDCount && !cheating; i++)
       {
