@@ -7,7 +7,8 @@
 #define GLOBAL_SAT 255
 #define GLOBAL_BRGHT 60
 #define frame_tick 20 //delays between frameupdates
-#define game_tick 180 //delays between game updates
+#define game_tick 200 //delays between game updates
+#define donut true
 #define cheating false
 /*
  * snake settings
@@ -63,7 +64,8 @@ typedef enum{
 } color;
 
 typedef enum{
-  IDLE = 0,
+  STARTUP = 0,
+  IDLE,
   RUNNING,
   PAUSED,
   WON,
@@ -78,7 +80,7 @@ cRGB pixel;
 cRGB blank;
 
 int snake_lenght = SNAKE_LENGHT_START;
-int game_state = IDLE;
+int game_state = STARTUP;
 uint64_t time_since_statechange = 0;
 int8_t board[LEDHeight][LEDWidth];
 bool masked = false;
@@ -137,13 +139,19 @@ void renderBoard(){
         LED.set_crgb_at(i, pixel);
       }
       else if(field_value > 0){
-        if(game_state == GAME_OVER) {
+        if(game_state == GAME_OVER || game_state == PAUSED) {
+          // scanner over snake
+          uint16_t hue = (level*360/(6) )%360;
+          uint16_t bri = current_brightness * (field_value / snake_lenght) + 1;
           if (((millis()-time_since_statechange) % ((snake_lenght+1)*60)) / 60 == (snake_lenght-field_value)){
-            LED.set_crgb_at(i, blank);
+            if(game_state == GAME_OVER)
+              LED.set_crgb_at(i, blank);
+            else{
+              pixel.SetHSV(hue, GLOBAL_SAT/2, current_brightness);
+              LED.set_crgb_at(i, pixel);
+            }
           }
           else{
-            uint16_t hue = (level*360/(6) )%360;
-            uint16_t bri = current_brightness * (field_value / snake_lenght) + 1;
             pixel.SetHSV(hue, GLOBAL_SAT/2, bri);
             LED.set_crgb_at(i, pixel);
           }
@@ -274,27 +282,56 @@ void snake(uint8_t in){
   int new_pos[2];
 
   /*
-   * inputs
+   * next state logic
    */
-  if(input(in,A))// || input(in,B))
-  {
-    if(game_state == GAME_OVER || game_state == IDLE || game_state == WON){
+  if(game_state == STARTUP){
+    time_since_statechange = millis();
+    game_state = IDLE;
+
+    //initialize game
+    pos[X_] = X_start;
+    pos[Y_] = Y_start;
+    vel[X_] = 0;
+    vel[Y_] = 1;
+    snake_lenght = SNAKE_LENGHT_START;
+    memset(board, 0, sizeof(board));
+    board[pos[X_]][pos[Y_]] = snake_lenght;
+    current_brightness = GLOBAL_BRGHT;
+
+  }
+  if(game_state == PAUSED){
+    bool static was_unpressed = false;
+    if(!input(in,B)){
+      was_unpressed = true;
+    }
+    if(was_unpressed && input(in,B)){ //B button pressed: go to RUNNING
       game_state = RUNNING;
-      pos[X_] = X_start;
-      pos[Y_] = Y_start;
-      vel[X_] = 0;
-      vel[Y_] = 1;
-      snake_lenght = SNAKE_LENGHT_START;
-      memset(board, 0, sizeof(board));
-      board[pos[X_]][pos[Y_]] = snake_lenght;
-      newApple();
-      //newApple();
-      //newApple();
-      //newApple();
       time_since_statechange = millis();
-      current_brightness = GLOBAL_BRGHT;
-      masked = false;
-      effekt1 = false;
+      was_unpressed = false;
+    }
+    return;
+  }
+  if(game_state == GAME_OVER || game_state == IDLE || game_state == WON){
+    if(in && (millis()-time_since_statechange) > ((game_state == IDLE)?500:2000) ){ //any button pressed: go to RUNNING
+      if(game_state != IDLE){
+        time_since_statechange = millis();
+        game_state = IDLE;
+
+        //initialize game
+        pos[X_] = X_start;
+        pos[Y_] = Y_start;
+        vel[X_] = 0;
+        vel[Y_] = 1;
+        snake_lenght = SNAKE_LENGHT_START;
+        memset(board, 0, sizeof(board));
+        board[pos[X_]][pos[Y_]] = snake_lenght;
+        current_brightness = GLOBAL_BRGHT;
+      }
+      else{
+        time_since_statechange = millis();
+        game_state = RUNNING;
+        newApple();
+      }
     }
   }
 
@@ -302,6 +339,38 @@ void snake(uint8_t in){
   }
   else if(game_state == IDLE)
   {
+    int upper_bound = LEDHeight - 1 - Y_start;
+    int right_bound = LEDWidth - 1 - X_start;
+    int lower_bound = Y_start;
+    int left_bound = X_start;
+    if(pos[X_] == left_bound && pos[Y_] == upper_bound){
+      vel[X_] = 1;
+      vel[Y_] = 0;
+    }
+    else if(pos[X_] == right_bound && pos[Y_] == upper_bound){
+      vel[X_] = 0;
+      vel[Y_] = -1;
+    }
+    else if(pos[X_] == right_bound && pos[Y_] == lower_bound){
+      vel[X_] = -1;
+      vel[Y_] = 0;
+    }
+    else if(pos[X_] == left_bound && pos[Y_] == lower_bound){
+      vel[X_] = 0;
+      vel[Y_] = 1;
+    }
+    //move
+    pos[X_] = pos[X_]+vel[X_];
+    pos[Y_] = pos[Y_]+vel[Y_];
+    //shorten
+    int8_t* linear_board = (int8_t*)board;
+    for(int i=0; i<LEDCount && !cheating; i++)
+    {
+      if(linear_board[i]>0){
+        linear_board[i]--;
+      }
+    }
+    //draw
     board[pos[X_]][pos[Y_]] = snake_lenght;
   }
   else if(game_state == RUNNING)
@@ -320,6 +389,20 @@ void snake(uint8_t in){
 
     bin_print(in);
     Serial.println();
+
+    { //pause
+      bool static was_unpressed = false;
+      if(!input(in,B)){
+        was_unpressed = true;
+      }
+      if(was_unpressed && input(in,B)){
+        game_state = PAUSED;
+        time_since_statechange = millis();
+        was_unpressed = false;
+        return;
+      }
+    }
+
     if(vel[Y_] >= 0 && input(in,UP)){
       vel[Y_] = 1;
       vel[X_] = 0;
@@ -347,20 +430,36 @@ void snake(uint8_t in){
      * bounding box
      */
     if(new_pos[X_] < 0){
-      new_pos[X_] = 0;
-      game_state = GAME_OVER;
+      if(donut)
+        new_pos[X_] = LEDWidth-1;
+      else{
+        new_pos[X_] = 0;
+        game_state = GAME_OVER;
+      }
     }
     if(new_pos[Y_] < 0){
-      new_pos[Y_] = 0;
-      game_state = GAME_OVER;
+      if(donut)
+        new_pos[Y_] = LEDHeight-1;
+      else {
+        new_pos[Y_] = 0;
+        game_state = GAME_OVER;
+      }
     }
     if(new_pos[X_] >= LEDWidth){
-      new_pos[X_] = pos[X_];
-      game_state = GAME_OVER;
+      if(donut)
+        new_pos[X_] = 0;
+      else {
+        new_pos[X_] = pos[X_];
+        game_state = GAME_OVER;
+      }
     }
     if(new_pos[Y_] >= LEDHeight){
-      new_pos[Y_] = pos[Y_];
-      game_state = GAME_OVER;
+      if(donut)
+        new_pos[Y_] = 0;
+      else {
+        new_pos[Y_] = pos[Y_];
+        game_state = GAME_OVER;
+      }
     }
     if(board[new_pos[X_]][new_pos[Y_]] > 1)
       game_state = GAME_OVER;
